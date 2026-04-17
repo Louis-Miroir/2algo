@@ -27,3 +27,16 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# test de lecture de la grille et affichage de la matrice 2D !!!!!!!!!
+from loader import load_grid
+
+# Remplace par le vrai nom de ton fichier .txt
+ma_grille = load_grid("gridMP1.txt")
+
+# Affiche la première ligne pour voir
+print("Première ligne de la matrice :", ma_grille[0])
+# Affiche toute la grille
+for ligne in ma_grille:
+    print(ligne)
