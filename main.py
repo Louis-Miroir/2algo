@@ -47,3 +47,18 @@ from loader import load_words
 mots = load_words("dictMP1.txt")  
 print(f"Nombre de mots chargés : {len(mots)}")
 print(f"Les 5 premiers mots : {mots[:5]}")
+
+from loader import load_grid, extract_variables
+
+# 1. On charge la grille
+grid = load_grid("gridMP1.txt")
+
+# 2. On extrait les variables (les quadruplets)
+variables = extract_variables(grid)
+
+# 3. On affiche le résultat proprement
+print(f"--- Nombre de variables trouvées : {len(variables)} ---")
+for v in variables:
+    i, j, h, l = v
+    direction = "Horizontal" if h else "Vertical"
+    print(f"Position ({i}, {j}) | Direction: {direction} | Longueur: {l}")

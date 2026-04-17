@@ -47,4 +47,49 @@ def load_words(path):
 
 def extract_variables(grid):
     """Extraire les variables (i, j, h, l) horizontales et verticales de la grille."""
-    pass
+    variables = []
+
+    if not grid:
+        return variables
+
+    n_rows = len(grid)
+    n_cols = len(grid[0])
+
+    for i, row in enumerate(grid):
+        start_j = None
+        length = 0
+
+        for j, cell in enumerate(row):
+            if cell == 0:
+                if start_j is None:
+                    start_j = j
+                length += 1
+            else:
+                if length >= 2:
+                    variables.append((i, start_j, True, length))
+                start_j = None
+                length = 0
+
+        if length >= 2:
+            variables.append((i, start_j, True, length))
+
+    for j in range(n_cols):
+        start_i = None
+        length = 0
+
+        for i in range(n_rows):
+            cell = grid[i][j]
+            if cell == 0:
+                if start_i is None:
+                    start_i = i
+                length += 1
+            else:
+                if length >= 2:
+                    variables.append((start_i, j, False, length))
+                start_i = None
+                length = 0
+
+        if length >= 2:
+            variables.append((start_i, j, False, length))
+
+    return variables
