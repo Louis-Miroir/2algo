@@ -33,7 +33,16 @@ def load_grid(path):
 
 def load_words(path):
     """Lire un fichier TXT de dictionnaire et retourner une liste de mots."""
-    pass
+    words = []
+
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            word = line.strip()
+            if not word:
+                continue
+            words.append(word.upper())
+
+    return words
 
 
 def extract_variables(grid):
