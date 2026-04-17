@@ -5,29 +5,76 @@ from loader import Variable
 
 def is_consistent(var, word, assignment, intersections):
     """Verifier si l'affectation var=word respecte les contraintes d'intersection."""
-    # PSEUDO-CODE:
-    # 1. Pour chaque variable deja assignee dans assignment:
-    # 2. Si elle intersecte var:
-    # 3. Comparer les lettres aux indices d'intersection.
-    # 4. Si une lettre differe, retourner False.
-    # 5. Sinon, continuer.
-    # 6. Si aucune contradiction, retourner True.
-    pass
+    if len(word) != var[3]:
+        return False
+
+    for v1, v2, idx1, idx2 in intersections:
+        if v1 == var and v2 in assignment:
+            other_word = assignment[v2]
+            if idx1 >= len(word) or idx2 >= len(other_word):
+                return False
+            if word[idx1] != other_word[idx2]:
+                return False
+
+        elif v2 == var and v1 in assignment:
+            other_word = assignment[v1]
+            if idx2 >= len(word) or idx1 >= len(other_word):
+                return False
+            if word[idx2] != other_word[idx1]:
+                return False
+
+    return True
+
+
+def solve(assignment, variables, words, intersections):
+    """Resoudre le CSP par backtracking recursif et retourner une affectation ou None."""
+    if len(assignment) == len(variables):
+        return assignment
+
+    current_var = None
+    for var in variables:
+        if var not in assignment:
+            current_var = var
+            break
+
+    if current_var is None:
+        return assignment
+
+    used_words = set(assignment.values())
+
+    for candidate_word in words:
+        if candidate_word in used_words:
+            continue
+
+        if is_consistent(current_var, candidate_word, assignment, intersections):
+            assignment[current_var] = candidate_word
+
+            result = solve(assignment, variables, words, intersections)
+            if result is not None:
+                return result
+
+            # Retour en arriere: on annule l'affectation pour essayer un autre mot.
+            del assignment[current_var]
+
+    return None
 
 
 def backtracking(variables, domains, intersections, assignment):
     """Resoudre le CSP par Backtracking simple (BT)."""
-    # PSEUDO-CODE:
-    # 1. Si toutes les variables sont assignees, retourner assignment (solution).
-    # 2. Choisir une variable non assignee (ordre fixe).
-    # 3. Pour chaque mot du domaine de cette variable:
-    # 4. Verifier la coherence locale avec is_consistent.
-    # 5. Si coherent, ajouter var->mot a assignment.
-    # 6. Appeler recursivement backtracking(...).
-    # 7. Si la recursion trouve une solution, la propager.
-    # 8. Sinon, retirer l'affectation (retour arriere) et essayer mot suivant.
-    # 9. Si aucun mot ne marche, retourner echec (None).
-    pass
+    # Compatibilite avec l'API du projet: si domains est un dict var->liste,
+    # on utilise l'union des mots comme dictionnaire global de candidats.
+    if isinstance(domains, dict):
+        words = []
+        seen = set()
+        for values in domains.values():
+            for w in values:
+                if w not in seen:
+                    seen.add(w)
+                    words.append(w)
+    else:
+        words = list(domains)
+
+    return solve(assignment, variables, words, intersections)
 
 
 def forward_checking(variables, domains, intersections, assignment):
