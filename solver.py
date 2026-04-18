@@ -1,115 +1,182 @@
 """Algorithmes CSP: Backtracking, Forward Checking, et MRV."""
 
 from loader import Variable
+import time
+
+class CSPStats:
+    def __init__(self):
+        self.nodes_visited = 0
+        self.start_time = 0
+        self.end_time = 0
+
+    def start_timer(self):
+        self.start_time = time.time()
+        self.nodes_visited = 0
+
+    def stop_timer(self):
+        self.end_time = time.time()
+
+    def get_duration(self):
+        return self.end_time - self.start_time
 
 
-def is_consistent(var, word, assignment, intersections):
-    """Verifier si l'affectation var=word respecte les contraintes d'intersection."""
-    if len(word) != var[3]:
-        return False
-
+def get_intersections_by_var(variables, intersections):
+    """Organiser les intersections par variable pour un acces plus rapide."""
+    adj = {v: [] for v in variables}
     for v1, v2, idx1, idx2 in intersections:
-        if v1 == var and v2 in assignment:
-            other_word = assignment[v2]
-            if idx1 >= len(word) or idx2 >= len(other_word):
-                return False
-            if word[idx1] != other_word[idx2]:
-                return False
+        adj[v1].append((v2, idx1, idx2))
+        adj[v2].append((v1, idx2, idx1))
+    return adj
 
-        elif v2 == var and v1 in assignment:
-            other_word = assignment[v1]
-            if idx2 >= len(word) or idx1 >= len(other_word):
-                return False
-            if word[idx2] != other_word[idx1]:
-                return False
 
+def is_consistent_optimized(var, word, assignment, adj):
+    """Verifier si l'affectation var=word respecte les contraintes d'intersection."""
+    for neighbor, my_idx, neighbor_idx in adj[var]:
+        if neighbor in assignment:
+            if word[my_idx] != assignment[neighbor][neighbor_idx]:
+                return False
     return True
 
 
-def solve(assignment, variables, words, intersections):
-    """Resoudre le CSP par backtracking recursif et retourner une affectation ou None."""
+# --- BACKTRACKING SIMPLE ---
+
+def solve_backtracking(assignment, variables, domains_lists, adj, stats):
+    stats.nodes_visited += 1
+    
+    # Limitation pour eviter de bloquer sur MP2 (BT est tres inefficace sur de gros index)
+    if stats.nodes_visited > 500000:
+        return None
+
     if len(assignment) == len(variables):
         return assignment
 
-    current_var = None
-    for var in variables:
-        if var not in assignment:
-            current_var = var
+    var = None
+    for v in variables:
+        if v not in assignment:
+            var = v
             break
-
-    if current_var is None:
-        return assignment
-
+            
     used_words = set(assignment.values())
-
-    for candidate_word in words:
-        if candidate_word in used_words:
-            continue
-
-        if is_consistent(current_var, candidate_word, assignment, intersections):
-            assignment[current_var] = candidate_word
-
-            result = solve(assignment, variables, words, intersections)
+    
+    for word in domains_lists[var]:
+        if word not in used_words and is_consistent_optimized(var, word, assignment, adj):
+            assignment[var] = word
+            result = solve_backtracking(assignment, variables, domains_lists, adj, stats)
             if result is not None:
                 return result
-
-            # Retour en arriere: on annule l'affectation pour essayer un autre mot.
-            del assignment[current_var]
-
+            del assignment[var]
+            
     return None
 
 
 def backtracking(variables, domains, intersections, assignment):
-    """Resoudre le CSP par Backtracking simple (BT)."""
-    # Compatibilite avec l'API du projet: si domains est un dict var->liste,
-    # on utilise l'union des mots comme dictionnaire global de candidats.
-    if isinstance(domains, dict):
-        words = []
-        seen = set()
-        for values in domains.values():
-            for w in values:
-                if w not in seen:
-                    seen.add(w)
-                    words.append(w)
-    else:
-        words = list(domains)
+    stats = CSPStats()
+    stats.start_timer()
+    adj = get_intersections_by_var(variables, intersections)
+    # BT utilise les listes de domaines filtrées par longueur
+    res = solve_backtracking(assignment, variables, domains, adj, stats)
+    stats.stop_timer()
+    return res, stats
 
-    return solve(assignment, variables, words, intersections)
+
+# --- FORWARD CHECKING ---
+
+def solve_forward_checking(assignment, variables, domains_sets, adj, stats, use_mrv=False):
+    stats.nodes_visited += 1
+    
+    if len(assignment) == len(variables):
+        return assignment
+
+    if use_mrv:
+        var = select_unassigned_variable_mrv(variables, domains_sets, assignment)
+    else:
+        var = None
+        for v in variables:
+            if v not in assignment:
+                var = v
+                break
+
+    used_words = set(assignment.values())
+    
+    # On itere sur une copie du domaine car on va le modifier (via forward checking)
+    # On trie ou on prend l'ordre par défaut.
+    words_to_try = list(domains_sets[var])
+    
+    for word in words_to_try:
+        if word in used_words:
+            continue
+            
+        if is_consistent_optimized(var, word, assignment, adj):
+            assignment[var] = word
+            removals = []
+            
+            # Propagation: chaque mot est unique
+            for other_var in variables:
+                if other_var not in assignment:
+                    if word in domains_sets[other_var]:
+                        domains_sets[other_var].remove(word)
+                        removals.append((other_var, word))
+            
+            # Propagation: intersections
+            valid_propagation = True
+            for neighbor, my_idx, neighbor_idx in adj[var]:
+                if neighbor not in assignment:
+                    # Trouver les mots incompatibles
+                    to_remove = [w for w in domains_sets[neighbor] if word[my_idx] != w[neighbor_idx]]
+                    
+                    if to_remove:
+                        for w in to_remove:
+                            domains_sets[neighbor].remove(w)
+                            removals.append((neighbor, w))
+                    
+                    if not domains_sets[neighbor]:
+                        valid_propagation = False
+                        break
+            
+            if valid_propagation:
+                result = solve_forward_checking(assignment, variables, domains_sets, adj, stats, use_mrv)
+                if result is not None:
+                    return result
+            
+            # Restauration (Backtrack)
+            for r_var, r_word in reversed(removals):
+                domains_sets[r_var].add(r_word)
+            del assignment[var]
+            
+    return None
 
 
 def forward_checking(variables, domains, intersections, assignment):
-    """Resoudre le CSP par Forward Checking (FC) avec restauration manuelle des domaines."""
-    # PSEUDO-CODE:
-    # 1. Si toutes les variables sont assignees, retourner assignment.
-    # 2. Choisir une variable non assignee.
-    # 3. Pour chaque mot du domaine de cette variable:
-    # 4. Si coherent avec assignment, affecter var=mot.
-    # 5. Propager: pour chaque voisin non assigne, filtrer son domaine
-    #    en supprimant les mots incompatibles avec var=mot.
-    # 6. Memoriser exactement les suppressions effectuees pour pouvoir restaurer.
-    # 7. Si un domaine voisin devient vide, echec local -> restaurer puis essayer mot suivant.
-    # 8. Sinon, appel recursif forward_checking(...).
-    # 9. Si succes recursif, propager la solution.
-    # 10. Sinon, restaurer toutes les suppressions et desaffecter var.
-    # 11. Si aucun mot ne marche, retourner echec (None).
-    pass
+    stats = CSPStats()
+    stats.start_timer()
+    adj = get_intersections_by_var(variables, intersections)
+    # On convertit en sets pour des suppressions en O(1)
+    domains_sets = {v: set(d) for v, d in domains.items()}
+    res = solve_forward_checking(assignment, variables, domains_sets, adj, stats, use_mrv=False)
+    stats.stop_timer()
+    return res, stats
 
 
-def select_unassigned_variable_mrv(variables, domains, assignment):
-    """Choisir la variable non assignee avec le plus petit domaine (heuristique MRV)."""
-    # PSEUDO-CODE:
-    # 1. Construire la liste des variables non assignees.
-    # 2. Calculer la taille de domaine de chacune.
-    # 3. Retourner celle de taille minimale.
-    # 4. En cas d'egalite, appliquer une regle deterministe (ex: ordre d'origine).
-    pass
+# --- MRV ---
+
+def select_unassigned_variable_mrv(variables, domains_sets, assignment):
+    best_var = None
+    min_size = float('inf')
+    
+    for v in variables:
+        if v not in assignment:
+            size = len(domains_sets[v])
+            if size < min_size:
+                min_size = size
+                best_var = v
+    return best_var
 
 
 def forward_checking_mrv(variables, domains, intersections, assignment):
-    """Resoudre le CSP par FC en utilisant MRV pour le choix de variable."""
-    # PSEUDO-CODE:
-    # 1. Meme schema que forward_checking.
-    # 2. Difference principale: selectionner la prochaine variable via MRV.
-    # 3. Faire la meme propagation, detection d'echec, restauration, et retour arriere.
-    # 4. Retourner la solution complete ou None.
-    pass
+    stats = CSPStats()
+    stats.start_timer()
+    adj = get_intersections_by_var(variables, intersections)
+    domains_sets = {v: set(d) for v, d in domains.items()}
+    res = solve_forward_checking(assignment, variables, domains_sets, adj, stats, use_mrv=True)
+    stats.stop_timer()
+    return res, stats

@@ -1,6 +1,6 @@
-"""Utilitaires pour les intersections, affichage, et aides de debug."""
+"""Utilitaires pour les intersections, domaines, affichage, et aides de debug."""
 
-from loader import Grid, Variable
+from loader import Grid, Variable, load_grid, load_words, extract_variables
 
 
 def compute_intersections(variables):
@@ -25,6 +25,25 @@ def compute_intersections(variables):
                 intersections.append((v_h, v_v, idx_h, idx_v))
 
     return intersections
+
+
+def get_domains(variables, words):
+    """Calculer le domaine initial pour chaque variable (mots de la bonne longueur)."""
+    domains = {}
+    
+    # Pre-filtrage par longueur pour accelerer
+    length_map = {}
+    for w in words:
+        l = len(w)
+        if l not in length_map:
+            length_map[l] = []
+        length_map[l].append(w)
+        
+    for var in variables:
+        _, _, _, l = var
+        domains[var] = length_map.get(l, [])
+        
+    return domains
 
 
 def build_empty_solution_grid(grid):

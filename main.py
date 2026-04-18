@@ -1,111 +1,67 @@
 """Point d'entree: chargement, preparation, execution des solveurs, et mesures."""
 
+import time
 from loader import extract_variables, load_grid, load_words
 from solver import backtracking, forward_checking, forward_checking_mrv
-from utils import compute_intersections, display_assignment
+from utils import compute_intersections, display_assignment, get_domains
 
 
-def run_backtracking(grid_path, words_path):
-    """Charger les donnees puis executer la resolution Backtracking."""
-    pass
+def run_experiment(grid_path, dict_path, label):
+    """Executer les 3 algorithmes sur un couple (grille, dictionnaire)."""
+    print(f"\n{'='*20} EXPERIENCES : {label} {'='*20}")
+    
+    try:
+        grid = load_grid(grid_path)
+        words = load_words(dict_path)
+    except FileNotFoundError:
+        print(f"Erreur : Fichier non trouve ({grid_path} ou {dict_path})")
+        return
 
+    variables = extract_variables(grid)
+    intersections = compute_intersections(variables)
+    domains = get_domains(variables, words)
+    
+    print(f"Grille: {len(grid)}x{len(grid[0])}")
+    print(f"Variables: {len(variables)}")
+    print(f"Intersections: {len(intersections)}")
+    print(f"Mots dans le dictionnaire: {len(words)}")
 
-def run_forward_checking(grid_path, words_path):
-    """Charger les donnees puis executer la resolution Forward Checking."""
-    pass
+    algorithms = [
+        ("Backtracking", backtracking),
+        ("Forward Checking", forward_checking),
+        ("FC + MRV", forward_checking_mrv)
+    ]
 
+    for name, func in algorithms:
+        if label == "MP2" and name == "Backtracking":
+            print(f"\n--- Algorithme : {name} ---")
+            print("(!) Backtracking ignore pour MP2 car trop inefficace (complexité exponentielle).")
+            continue
 
-def run_forward_checking_mrv(grid_path, words_path):
-    """Charger les donnees puis executer la resolution FC + MRV."""
-    pass
+        print(f"\n--- Algorithme : {name} ---")
+        assignment = {}
+        solution, stats = func(variables, domains, intersections, assignment)
+        
+        if solution:
+            print(f"Solution trouvée !")
+            print(f"Temps d'exécution : {stats.get_duration():.4f} secondes")
+            print(f"Nombre de nœuds visités : {stats.nodes_visited}")
+            # Affichage de la grille pour MP1 (plus lisible)
+            if label == "MP1":
+                display_assignment(grid, variables, solution)
+        else:
+            if stats.nodes_visited >= 500000 and name == "Backtracking":
+                print(f"ECHEC : Limite de {stats.nodes_visited} noeuds atteinte (Trop lent).")
+            else:
+                print(f"Aucune solution trouvée en {stats.nodes_visited} noeuds.")
+            print(f"Temps d'exécution : {stats.get_duration():.4f} secondes")
 
 
 def main():
-    """Orchestrer les essais, afficher les resultats, et comparer les performances."""
-    pass
+    """Lancer les tests pour MP1 et MP2."""
+    run_experiment("gridMP1.txt", "dictMP1.txt", "MP1")
+    run_experiment("gridMP2.txt", "dictMP2.txt", "MP2")
 
 
 if __name__ == "__main__":
     main()
-
-
-# test de lecture de la grille et affichage de la matrice 2D !!!!!!!!!
-from loader import load_grid
-
-
-ma_grille = load_grid("gridMP1.txt")
-
-# Affiche la première ligne pour voir
-print("Première ligne de la matrice :", ma_grille[0])
-# Affiche toute la grille
-for ligne in ma_grille:
-    print(ligne)
-
-from loader import load_words
-
-# Test du dictionnaire
-mots = load_words("dictMP1.txt")  
-print(f"Nombre de mots chargés : {len(mots)}")
-print(f"Les 5 premiers mots : {mots[:5]}")
-
-from loader import load_grid, extract_variables
-
-# 1. On charge la grille
-grid = load_grid("gridMP1.txt")
-
-# 2. On extrait les variables (les quadruplets)
-variables = extract_variables(grid)
-
-# 3. On affiche le résultat proprement
-print(f"--- Nombre de variables trouvées : {len(variables)} ---")
-for v in variables:
-    i, j, h, l = v
-    direction = "Horizontal" if h else "Vertical"
-    print(f"Position ({i}, {j}) | Direction: {direction} | Longueur: {l}")
-
-
-from loader import load_grid, load_words, extract_variables
-from utils import compute_intersections, display_assignment
-
-# 1. Chargement
-grid = load_grid("gridMP1.txt")
-words = load_words("dictMP1.txt")
-variables = extract_variables(grid)
-intersections = compute_intersections(variables)
-
-# 2. On affiche les infos de base
-print(f"Variables : {len(variables)}")
-print(f"Intersections : {len(intersections)}")
-
-# 3. On simule un remplissage partiel pour tester display_assignment
-# On prend la première variable horizontale et la première verticale
-test_assignment = {}
-if len(variables) >= 2:
-    # On met un mot bidon pour tester l'affichage
-    test_assignment[variables[0]] = "ABC" # Horizontal
-    test_assignment[variables[3]] = "AZER" # Vertical
-    
-print("\nTest d'affichage (Simulation) :")
-display_assignment(grid, variables, test_assignment)
-
-from loader import load_grid, load_words, extract_variables
-from utils import compute_intersections, display_assignment
-from solver import solve
-
-# 1. Préparation des données
-grid = load_grid("gridMP1.txt")
-words = load_words("dictMP1.txt")
-variables = extract_variables(grid)
-intersections = compute_intersections(variables)
-
-print(f"Lancement du solveur pour {len(variables)} variables...")
-
-# 2. Appel du solveur (on commence avec un dictionnaire vide {})
-solution = solve({}, variables, words, intersections)
-
-# 3. Résultat
-if solution:
-    print("Succès ! Voici la grille complétée :")
-    display_assignment(grid, variables, solution)
-else:
-    print("Dommage... aucune solution n'est possible avec ce dictionnaire.")
